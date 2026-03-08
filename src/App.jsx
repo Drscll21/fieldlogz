@@ -2,59 +2,62 @@ import { useState, useEffect, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, RadarChart, Radar, PolarGrid,
-  PolarAngleAxis, LineChart, Line, Legend
+  PolarAngleAxis, LineChart, Line, Legend,
+  PieChart, Pie, Cell
 } from "recharts";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-const LOG_TYPES = [
+const LOG_TYPES =[
   { id: "training",   label: "Training",            icon: "📘", color: "#C9A84C" },
-  { id: "praise",     label: "Praise",              icon: "⭐", color: "#e8e8e8" },
-  { id: "discipline", label: "Safety & Discipline", icon: "⚠️", color: "#ff6b6b" },
+  { id: "praise",     label: "Praise",              icon: "⭐", color: "#FFFFFF" },
+  { id: "discipline", label: "Safety & Discipline", icon: "⚠️", color: "#ff4d4d" },
   { id: "other",      label: "Other",               icon: "📝", color: "#aaaaaa" },
 ];
 
-const SEVERITY_LEVELS = [
-  { id: "minor",    label: "Minor",    sub: "Verbal Warning",      color: "#C9A84C" },
-  { id: "moderate", label: "Moderate", sub: "Written Warning",     color: "#E8873A" },
-  { id: "major",    label: "Major",    sub: "Formal Disciplinary", color: "#ff6b6b" },
+const SEVERITY_LEVELS =[
+  { id: "minor",    label: "Minor",    color: "#C9A84C" },
+  { id: "moderate", label: "Moderate", color: "#E8873A" },
+  { id: "severe",   label: "Severe",   color: "#ff4d4d" },
 ];
 
-const DEFAULT_SKILL_AREAS = [
+const DEFAULT_SKILL_AREAS =[
   "Conduit & Cable Management","Switchboard Work","Circuit Testing",
   "WHS / Safety Compliance","Tools & Equipment","Documentation",
   "Communication","Initiative",
 ];
 
-const DEFAULT_SAFETY_CATS = [
+const DEFAULT_SAFETY_CATS =[
   "Near Miss","PPE Breach","Unsafe Work Practice",
   "Site Hazard","Electrical Incident","Tool/Equipment Issue","Other",
 ];
 
-const AS3000_COMPETENCIES = [
+const AS3000_COMPETENCIES =[
   "Clause 1 — Scope & General","Clause 2 — General Arrangement",
   "Clause 3 — Selection of Wiring Systems","Clause 4 — Protection",
   "Clause 5 — Earthing","Clause 6 — Switchboards",
   "Clause 7 — Testing & Inspection","Clause 8 — Special Installations",
 ];
 
-const DEFAULT_GRADES = ["1st Year App","2nd Year App","3rd Year App","4th Year App","A-Grade"];
-const SITE_TYPES = ["Commercial","Residential","Industrial","Infrastructure","Other"];
+const DEFAULT_GRADES =["1st Year App","2nd Year App","3rd Year App","4th Year App","A-Grade"];
 
-const DEFAULT_WORKERS = [
-  { id:"w1", name:"Jordan Mitchell", grade:"2nd Year App", sites:["site1"], apprenticeStart:"2023", competencies:[] },
-  { id:"w2", name:"Sam Nguyen",      grade:"3rd Year App", sites:["site2"], apprenticeStart:"2022", competencies:[] },
-  { id:"w3", name:"Riley Thompson",  grade:"1st Year App", sites:["site1"], apprenticeStart:"2024", competencies:[] },
-  { id:"w4", name:"Ash Kowalski",    grade:"4th Year App", sites:["site3"], apprenticeStart:"2021", competencies:[] },
-  { id:"w5", name:"Taylor Brennan",  grade:"A-Grade",      sites:["site3"], apprenticeStart:"2018", competencies:[] },
+const DEFAULT_BUILDERS =["Lendlease", "Multiplex", "Hutchinson Builders", "CPB Contractors", "John Holland", "Probuild"];
+const DEFAULT_SUPERVISORS =["Jordan Mitchell", "Sarah Connor", "Alex Vance", "TBD"];
+
+const DEFAULT_WORKERS =[
+  { id:"w1", name:"Jordan Mitchell", grade:"2nd Year App", competencies:[] },
+  { id:"w2", name:"Sam Nguyen",      grade:"3rd Year App", competencies:[] },
+  { id:"w3", name:"Riley Thompson",  grade:"1st Year App", competencies:[] },
+  { id:"w4", name:"Ash Kowalski",    grade:"4th Year App", competencies:[] },
+  { id:"w5", name:"Taylor Brennan",  grade:"A-Grade",      competencies:[] },
 ];
 
-const DEFAULT_SITES = [
-  { id:"site1", name:"Parkside Retail",      address:"123 Park St, Parkside VIC 3125",      type:"Commercial"  },
-  { id:"site2", name:"Westfield Commercial", address:"45 Marion Rd, Marion VIC 3043",        type:"Commercial"  },
-  { id:"site3", name:"CBD Office Tower",     address:"1 King St, Melbourne VIC 3000",        type:"Commercial"  },
-  { id:"site4", name:"Residential Estate",   address:"77 Grove Ave, Burwood VIC 3125",       type:"Residential" },
-  { id:"site5", name:"Industrial Park",      address:"9 Trade Rd, Bayswater VIC 3153",       type:"Industrial"  },
+const DEFAULT_SITES =[
+  { id:"site1", address:"123 Park St, Parkside VIC 3125", builders:["Lendlease"], supervisor:"Alex Vance" },
+  { id:"site2", address:"45 Marion Rd, Marion VIC 3043", builders:["Multiplex"], supervisor:"Sarah Connor" },
+  { id:"site3", address:"1 King St, Melbourne VIC 3000", builders:["Hutchinson Builders"], supervisor:"Jordan Mitchell" },
+  { id:"site4", address:"77 Grove Ave, Burwood VIC 3125", builders:[], supervisor:"TBD" },
+  { id:"site5", address:"9 Trade Rd, Bayswater VIC 3153", builders:["CPB Contractors"], supervisor:"Alex Vance" },
 ];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -62,8 +65,20 @@ const DEFAULT_SITES = [
 function lsGet(k, fb) { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } }
 function lsSet(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function uid()        { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
-function fmtDate(d)   { if (!d) return ""; return new Date(d).toLocaleDateString("en-AU", { day:"2-digit", month:"short", year:"numeric" }); }
-function isoToday()   { return new Date().toISOString().split("T")[0]; }
+
+function fmtDate(d) { 
+  if (!d) return ""; 
+  try {
+    return new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(d));
+  } catch { return d; }
+}
+
+function isoToday() { return new Date().toISOString().split("T")[0]; }
+function isoSixMonthsAgo() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 6);
+  return d.toISOString().split("T")[0];
+}
 
 function startOfWeek(d = new Date()) {
   const dt = new Date(d), day = dt.getDay();
@@ -77,10 +92,10 @@ const isLastMonth = ds => { const d=new Date(ds),n=new Date(),lm=new Date(n.getF
 
 function generateSMS(worker, log) {
   const sev = SEVERITY_LEVELS.find(s => s.id === log.severity);
-  return `Hi ${worker?.name?.split(" ")[0] ?? ""},\n\nThis message is a formal ${sev?.label?.toLowerCase() ?? "verbal"} warning (${sev?.sub}) following our discussion on ${fmtDate(log.date)}.\n\nMatter: ${log.safetyCategory || log.skillArea || "General"}\nDetails: ${log.notes}\nSite: ${log.siteName || ""}\n\nPlease ensure this issue does not reoccur. If you wish to discuss this matter, please speak with your supervisor directly.\n\nThis record has been logged for your employment file.\n\n— ProGlow Electrics Supervisor`;
+  return `Hi ${worker?.name ?? ""},\n\nThis message is a formal ${sev?.label?.toLowerCase() ?? "verbal"} warning following our discussion on ${fmtDate(log.date)}.\n\nMatter: ${log.safetyCategory || log.skillArea || "General"}\nDetails: ${log.safetyComment || log.notes}\nSite: ${log.siteAddress || ""}\n\nPlease ensure this issue does not reoccur. If you wish to discuss this matter, please speak with your supervisor directly.\n\nThis record has been logged for your employment file.\n\n— ProGlow Electrics Supervisor`;
 }
 
-// ─── PRINT REPORT ────────────────────────────────────────────────────────────
+// ─── PRINT REPORT (PDF GEN) ──────────────────────────────────────────────────
 
 function printReport(title, rows, meta = "") {
   const w = window.open("", "_blank");
@@ -90,38 +105,50 @@ function printReport(title, rows, meta = "") {
   const tableRows = rows.map(r => `
     <tr>
       <td>${fmtDate(r.date)}</td>
-      <td>${r.workerName}</td>
-      <td>${r.role === "also" ? '<span style="color:#666;font-size:11px">Also Responsible</span>' : '<span style="color:#111;font-size:11px;font-weight:600">Primary</span>'}</td>
+      <td>
+        <div style="font-weight:700;margin-bottom:4px;font-size:11px;">${r.siteAddress}</div>
+        ${r.builders?.length ? `<div style="color:#555;font-size:10px">Bldr: ${r.builders.join(", ")}</div>` : ''}
+        ${r.supervisor ? `<div style="color:#555;font-size:10px">Sup: ${r.supervisor}</div>` : ''}
+      </td>
+      <td><span style="font-weight:700;color:#111;font-size:11px;">${r.workerName}</span></td>
+      <td>${r.alsoNames?.length ? r.alsoNames.map(n=>`<div style="margin-bottom:2px">${n}</div>`).join("") : '<span style="color:#999">—</span>'}</td>
       <td>${(r.types||[]).map(t => {
         const lt = LOG_TYPES.find(x=>x.id===t);
-        return `<span style="background:${typeBg[t]||"#f5f5f5"};color:${typeColor[t]||"#333"};padding:2px 7px;border-radius:4px;font-size:11px;margin-right:3px;">${lt?.icon||""} ${lt?.label||t}</span>`;
+        return `<span style="background:${typeBg[t]||"#f5f5f5"};color:${typeColor[t]||"#333"};padding:2px 7px;border-radius:4px;font-size:11px;margin-bottom:3px;display:inline-block;">${lt?.icon||""} ${lt?.label||t}</span><br/>`;
       }).join("")}</td>
-      <td>${r.siteName || ""}</td>
-      <td>${r.skillArea || r.safetyCategory || ""}</td>
+      <td>
+        ${r.severity && (r.types||[]).includes('discipline') ? `<span style="font-size:10px;padding:2px 5px;background:#fff3cd;border-radius:3px;margin-bottom:4px;display:inline-block;">Sev: ${r.severity}</span><br/>` : ""}
+        ${r.skillArea || r.safetyCategory || ""}
+      </td>
       <td style="text-align:center;font-weight:700">${r.rating}/5</td>
-      <td>${r.severity ? `<span style="font-size:11px;padding:2px 6px;background:#fff3cd;border-radius:3px;">${r.severity}</span>` : ""}</td>
-      <td>${r.notes}</td>
-      <td style="text-align:center">${r.followUp ? "🔔" : ""}</td>
+      <td>
+        ${r.trainingComment ? `<div style="margin-bottom:6px"><strong>Training:</strong> ${r.trainingComment}</div>` : ''}
+        ${r.praiseComment ? `<div style="margin-bottom:6px"><strong>Praise:</strong> ${r.praiseComment}</div>` : ''}
+        ${r.safetyComment ? `<div style="margin-bottom:6px"><strong>Safety:</strong> ${r.safetyComment}</div>` : ''}
+        ${r.notes ? `<div style="margin-bottom:6px"><strong>General:</strong> ${r.notes}</div>` : ''}
+        ${r.photo ? `<div style="margin-top:6px;"><img src="${r.photo}" style="max-height:120px; border-radius:4px; border:1px solid #ccc;" /></div>` : ''}
+      </td>
     </tr>
   `).join("");
 
   w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
   <style>
-    body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#111;padding:28px;max-width:1100px;margin:0 auto;}
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
+    body{font-family:'Outfit',Arial,sans-serif;font-size:12px;color:#111;padding:28px;max-width:1100px;margin:0 auto;}
     .header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #111;padding-bottom:14px;margin-bottom:20px;}
     .logo-wrap{display:flex;align-items:center;gap:14px;}
-    .logo-img{height:48px;}
+    .logo-img{height:48px;filter:grayscale(100%) contrast(1000%);}
     .company{font-size:11px;color:#555;}
-    .report-title{font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:2px;}
+    .report-title{font-family:'Bebas Neue',sans-serif;font-size:26px;font-weight:700;letter-spacing:2px;color:#000;}
     .meta{font-size:11px;color:#666;margin-bottom:18px;line-height:1.8;}
     table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:11px;}
-    th{background:#111;color:#fff;padding:8px 10px;text-align:left;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:10px;}
+    th{background:#000;color:#fff;padding:8px 10px;text-align:left;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:10px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;}
     td{padding:7px 10px;border-bottom:1px solid #e5e5e5;vertical-align:top;}
     tr:nth-child(even) td{background:#fafafa;}
     .footer{margin-top:24px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:10px;display:flex;justify-content:space-between;}
     .summary{display:flex;gap:20px;margin-bottom:20px;}
     .stat{background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:10px 16px;text-align:center;}
-    .stat-n{font-size:22px;font-weight:700;color:#111;}
+    .stat-n{font-size:22px;font-weight:700;color:#111;font-family:'Bebas Neue',sans-serif;}
     .stat-l{font-size:10px;color:#777;text-transform:uppercase;letter-spacing:1px;}
     @media print{button{display:none;} body{padding:16px;}}
   </style></head><body>
@@ -134,7 +161,7 @@ function printReport(title, rows, meta = "") {
       </div>
     </div>
     <div style="text-align:right;font-size:11px;color:#555;">
-      Generated: ${new Date().toLocaleDateString("en-AU")}<br/>
+      Generated: ${fmtDate(new Date())}<br/>
       ${rows.length} record${rows.length !== 1 ? "s" : ""}
     </div>
   </div>
@@ -148,14 +175,14 @@ function printReport(title, rows, meta = "") {
   </div>
   <table>
     <thead><tr>
-      <th>Date</th><th>Worker</th><th>Role</th><th>Type</th><th>Site</th>
-      <th>Skill / Category</th><th>Rating</th><th>Severity</th><th>Notes</th><th>Follow-up</th>
+      <th>Date</th><th>Job Address</th><th>Primary Responsible</th><th>Also On-Site</th>
+      <th>Type</th><th>Cat/Skill</th><th>Team<br/>Rtg</th><th>Details & Observations</th>
     </tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
   <div class="footer">
     <span>ProGlow Electrics — Confidential Supervisor Record</span>
-    <span>FieldLog · ${new Date().toLocaleDateString("en-AU")}</span>
+    <span>FieldLog · ${fmtDate(new Date())}</span>
   </div>
   <script>window.onload=()=>window.print();<\/script>
   </body></html>`);
@@ -170,19 +197,16 @@ const CSS = `
 html{-webkit-tap-highlight-color:transparent;}
 :root{
   --bg:    #000000;
-  --s1:    #0d0d0d;
+  --s1:    #0a0a0a;
   --s2:    #141414;
-  --s3:    #1c1c1c;
-  --s4:    #242424;
-  --border:#282828;
-  --border2:#333333;
-  --text:  #f2f2f2;
-  --muted: #666666;
-  --dim:   #3a3a3a;
+  --s3:    #1f1f1f;
+  --border:#2a2a2a;
+  --border2:#3d3d3d;
+  --text:  #ffffff;
+  --muted: #999999;
   --gold:  #C9A84C;
   --gold2: #e8c96a;
-  --white: #f2f2f2;
-  --red:   #ff6b6b;
+  --red:   #ff4d4d;
   --green: #6bcf8f;
   --r:12px;
   --fh:'Bebas Neue',sans-serif;
@@ -193,55 +217,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .app{display:flex;flex-direction:column;min-height:100vh;max-width:540px;margin:0 auto;}
 
 /* ── HEADER ── */
-.hdr{
-  position:sticky;top:0;z-index:60;
-  background:#000;
-  border-bottom:2px solid var(--gold);
-  overflow:hidden;
-}
-.hdr-banner{
-  position:absolute;inset:0;
-  background:url('https://www.proglowelectrics.com.au/wp-content/uploads/2024/07/ProGlow-header-banner-responsive-optimised.jpg') center/cover no-repeat;
-  opacity:0.13;
-  pointer-events:none;
-}
-.hdr-inner{
-  position:relative;z-index:1;
-  padding:0 18px;
-  display:flex;align-items:center;justify-content:space-between;
-  height:66px;
-}
+.hdr{position:sticky;top:0;z-index:60;background:#000;border-bottom:2px solid var(--gold);overflow:hidden;}
+.hdr-inner{position:relative;z-index:1;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:66px;}
 .logo-area{display:flex;align-items:center;gap:12px;}
-.logo-img{height:38px;width:auto;object-fit:contain;filter:brightness(0) invert(1);}
-.logo-divider{width:1px;height:30px;background:var(--border2);}
-.logo-sub{font-family:var(--fm);font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;line-height:1.4;}
-.logo-sub strong{color:var(--gold);display:block;font-size:11px;letter-spacing:2px;}
-.hdr-count{font-family:var(--fm);font-size:10px;color:var(--muted);}
+.logo-img{height:32px;width:auto;object-fit:contain;filter:brightness(0) invert(1);}
+.hdr-count{font-family:var(--fm);font-size:11px;color:var(--muted); letter-spacing:1px; text-transform:uppercase;}
 
 /* ── BOTTOM NAV ── */
 .bnav{
-  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-  width:100%;max-width:540px;
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:540px;
   background:var(--s1);border-top:1px solid var(--border);
-  display:grid;grid-template-columns:repeat(6,1fr);
-  padding-bottom:env(safe-area-inset-bottom);z-index:60;
+  display:flex; padding-bottom:env(safe-area-inset-bottom);z-index:60;
+  height: 66px;
 }
-.ni{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:9px 4px 7px;cursor:pointer;border:none;background:none;color:var(--muted);font-family:var(--fb);font-size:9px;letter-spacing:0.3px;gap:3px;transition:color 0.15s;}
-.ni.active{color:var(--gold);}
-.ni-i{font-size:19px;line-height:1;}
+.ni{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;border:none;background:none;color:var(--muted);
+  font-family:var(--fb);font-size:9px;letter-spacing:0.3px;gap:3px;
+  transition:color 0.15s, background 0.15s; height:100%; padding:0 4px;
+}
+.ni.active{color:var(--text);}
+.ni-i{font-size:20px;line-height:1;}
+.ni-main{
+  background:var(--gold);color:#000;font-family:var(--fh);font-size:12px;letter-spacing:1px;
+  border-right: 1.5px solid #000; border-left: 1.5px solid #000;
+}
+.ni-main .ni-i {color:#000; margin-bottom: 2px;}
+.ni-main.active, .ni-main:hover {background:var(--gold2); color:#000;}
 
 /* ── MAIN ── */
 .main{flex:1;padding:18px 16px 110px;overflow-y:auto;}
 
 /* ── PAGE TITLES ── */
-.ptitle{font-family:var(--fh);font-size:32px;letter-spacing:2px;margin-bottom:0;line-height:1;}
+.ptitle{font-family:var(--fh);font-size:36px;letter-spacing:2px;margin-bottom:0;line-height:1;}
 .ptitle span{color:var(--gold);}
-.psub{font-size:11px;color:var(--muted);margin-bottom:18px;font-family:var(--fm);letter-spacing:1px;margin-top:3px;}
+.psub{font-size:11px;color:var(--muted);margin-bottom:18px;font-family:var(--fm);letter-spacing:1px;margin-top:4px;}
 
 /* ── CARDS ── */
 .card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;}
 .card.gold-border{border-color:var(--gold);}
-.ctitle{font-family:var(--fm);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+.ctitle{font-family:var(--fm);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
 
 /* ── STAT ROW ── */
 .srow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
@@ -255,13 +270,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .tbtn{flex:1;padding:8px;border-radius:8px;border:none;cursor:pointer;background:transparent;color:var(--muted);font-family:var(--fm);font-size:10px;letter-spacing:1px;text-transform:uppercase;transition:all 0.15s;}
 .tbtn.active{background:var(--s1);color:var(--gold);box-shadow:0 1px 6px rgba(0,0,0,0.6);}
 
-/* ── TABS ── */
-.tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;}
-.tabs::-webkit-scrollbar{display:none;}
-.tab{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--fm);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
-.tab.active{background:var(--gold);border-color:var(--gold);color:#000;}
-
-/* ── FORMS ── */
+/* ── ACCORDION / FORMS ── */
 .fg{margin-bottom:14px;}
 .fl{display:block;font-family:var(--fm);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
 .fi,.fs,.fta{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:15px;padding:11px 13px;outline:none;transition:border 0.15s;-webkit-appearance:none;appearance:none;}
@@ -275,11 +284,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .tpill.active{background:var(--s3);}
 .tck{position:absolute;top:6px;right:8px;width:16px;height:16px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:9px;color:#000;font-weight:700;}
 
+/* ── INTERACTION GROUPS (LOG ENTRY) ── */
+.ig{padding:14px;border-radius:10px;margin-bottom:14px;background:var(--s1);border:1px solid var(--border);}
+.ig-disc{border-color:rgba(255,77,77,0.3);background:linear-gradient(180deg, rgba(255,77,77,0.05) 0%, transparent 100%);}
+.ig-train{border-color:rgba(201,168,76,0.3);background:linear-gradient(180deg, rgba(201,168,76,0.05) 0%, transparent 100%);}
+.ig-praise{border-color:rgba(255,255,255,0.2);background:linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%);}
+.ig-title{font-family:var(--fh);font-size:20px;letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+
 /* ── SEVERITY ── */
 .sevrow{display:flex;gap:6px;}
 .sevpill{flex:1;padding:10px 4px;border-radius:10px;cursor:pointer;text-align:center;border:1.5px solid var(--border);background:var(--s2);font-size:12px;font-weight:600;color:var(--muted);transition:all 0.15s;}
-.sevpill .ss{font-size:9px;font-weight:400;display:block;margin-top:2px;font-family:var(--fm);}
-.sevpill.active{border-width:2px;}
+.sevpill.active{border-width:2px;color:#fff;}
 
 /* ── RATING ── */
 .rrow{display:flex;gap:7px;align-items:center;}
@@ -306,7 +321,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .btn-p:disabled{opacity:0.3;cursor:not-allowed;}
 .btn-p:hover:not(:disabled){background:var(--gold2);border-color:var(--gold2);}
 .btn-s{padding:9px 16px;border-radius:9px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--fm);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;transition:all 0.15s;}
-.btn-s:hover{border-color:var(--gold);color:var(--gold);}
+.btn-s:hover{border-color:var(--text);color:var(--text);}
 .btn-d{padding:9px 16px;border-radius:9px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-family:var(--fm);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;}
 .btn-g{padding:9px 16px;border-radius:9px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;font-family:var(--fm);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;}
 .btn-full{display:block;width:100%;}
@@ -327,9 +342,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .wcard{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s;display:flex;align-items:center;gap:14px;}
 .wcard:active,.wcard:hover{border-color:var(--gold);}
 .wav{width:46px;height:46px;border-radius:50%;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:1.5px solid var(--border2);}
-.wname{font-family:var(--fh);font-size:18px;letter-spacing:0.5px;}
+.wname{font-family:var(--fh);font-size:20px;letter-spacing:0.5px;}
 .wgrade{font-size:12px;color:var(--muted);margin-top:1px;}
-.wsites{font-size:11px;color:var(--gold);margin-top:3px;font-family:var(--fm);}
 .wmeta{flex:1;min-width:0;}
 .wstat{text-align:right;flex-shrink:0;}
 .wnum{font-family:var(--fh);font-size:26px;color:var(--gold);}
@@ -338,22 +352,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 /* ── SITE CARD ── */
 .scrd{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;}
 .scrd-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}
-.sname{font-family:var(--fh);font-size:18px;letter-spacing:0.5px;}
-.saddr{font-size:12px;color:var(--muted);margin-top:2px;font-family:var(--fm);}
-.stype{font-size:10px;color:var(--gold);font-family:var(--fm);letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
-
-/* ── SITE BARS ── */
-.sbrow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
-.sbname{font-size:13px;min-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sbtrack{flex:1;height:6px;background:var(--s3);border-radius:99px;overflow:hidden;}
-.sbfill{height:100%;border-radius:99px;background:var(--gold);transition:width 0.4s ease;}
-.sbcount{font-family:var(--fm);font-size:11px;color:var(--muted);min-width:22px;text-align:right;}
+.sname{font-family:var(--fh);font-size:20px;letter-spacing:0.5px;}
+.saddr{font-size:12px;color:var(--gold);margin-top:2px;font-family:var(--fm);}
+.stype{font-size:10px;color:var(--muted);font-family:var(--fm);letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
 
 /* ── MODAL ── */
 .moverlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
 .modal{background:var(--s1);border:1px solid var(--border);border-top:2px solid var(--gold);border-radius:20px 20px 0 0;padding:22px 18px 44px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;}
 .mhandle{width:38px;height:3px;background:var(--border2);border-radius:99px;margin:0 auto 18px;}
-.mtitle{font-family:var(--fh);font-size:24px;letter-spacing:1.5px;margin-bottom:14px;}
+.mtitle{font-family:var(--fh);font-size:26px;letter-spacing:1.5px;margin-bottom:14px;}
 .sms-pre{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap;font-family:var(--fb);color:var(--text);margin-bottom:14px;}
 .mactions{display:flex;gap:10px;}
 
@@ -362,14 +369,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .rf-title{font-family:var(--fm);font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);margin-bottom:12px;}
 .filter-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .fchip{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--muted);cursor:pointer;font-family:var(--fm);font-size:11px;letter-spacing:0.5px;transition:all 0.15s;}
-.fchip.on{background:var(--gold);border-color:var(--gold);color:#000;}
-.results-count{font-family:var(--fh);font-size:36px;color:var(--gold);line-height:1;}
+.fchip.on{background:var(--text);border-color:var(--text);color:#000;font-weight:600;}
+.results-count{font-family:var(--fh);font-size:40px;color:var(--gold);line-height:1;}
 .result-sub{font-family:var(--fm);font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
 
 /* ── PROFILE ── */
 .phdr{display:flex;align-items:center;gap:16px;margin-bottom:18px;}
 .pav{width:62px;height:62px;border-radius:50%;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:28px;border:2px solid var(--gold);flex-shrink:0;}
-.pname{font-family:var(--fh);font-size:24px;letter-spacing:0.5px;}
+.pname{font-family:var(--fh);font-size:28px;letter-spacing:1px;}
 .pgrade{font-size:12px;color:var(--muted);margin-top:2px;}
 
 /* ── COMP TAGS ── */
@@ -377,26 +384,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .ctag.on{background:#C9A84C15;border-color:#C9A84C50;color:var(--gold);}
 
 /* ── REPRIMAND ── */
-.ritem{background:#ff6b6b0a;border:1px solid #ff6b6b25;border-radius:10px;padding:12px 14px;margin-bottom:8px;}
+.ritem{background:#ff4d4d0a;border:1px solid #ff4d4d25;border-radius:10px;padding:12px 14px;margin-bottom:8px;}
 
 /* ── SETTINGS ── */
 .set-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .set-tag{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);flex:1;}
 
-/* ── SITE MULTISELECT ── */
+/* ── MULTISELECT DROPDOWN ── */
 .ms-wrap{position:relative;}
 .ms-trigger{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:14px;padding:10px 13px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border 0.15s;user-select:none;}
 .ms-trigger:hover,.ms-trigger.open{border-color:var(--gold);}
 .ms-trigger-left{display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow:hidden;}
 .ms-tags{display:flex;flex-wrap:nowrap;gap:5px;overflow:hidden;flex:1;min-width:0;}
-.ms-tag{display:inline-flex;align-items:center;gap:4px;background:var(--gold);color:#000;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;font-family:var(--fm);white-space:nowrap;flex-shrink:0;}
+.ms-tag{display:inline-flex;align-items:center;gap:4px;background:var(--text);color:#000;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:600;font-family:var(--fm);white-space:nowrap;flex-shrink:0;}
 .ms-tag button{background:none;border:none;cursor:pointer;color:#000;font-size:13px;line-height:1;padding:0;margin-left:1px;opacity:0.7;}
 .ms-tag button:hover{opacity:1;}
 .ms-overflow{font-size:11px;color:var(--gold);font-family:var(--fm);white-space:nowrap;flex-shrink:0;}
 .ms-placeholder{color:var(--muted);font-size:14px;}
 .ms-arrow{font-size:12px;color:var(--muted);flex-shrink:0;transition:transform 0.15s;}
 .ms-arrow.open{transform:rotate(180deg);}
-.ms-dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--s1);border:1px solid var(--gold);border-radius:10px;z-index:100;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6);}
+.ms-dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--s1);border:1px solid var(--gold);border-radius:10px;z-index:100;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.8);}
 .ms-search{width:100%;background:var(--s2);border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--fb);font-size:14px;padding:10px 13px;outline:none;}
 .ms-search::placeholder{color:var(--muted);}
 .ms-list{max-height:220px;overflow-y:auto;padding:4px 0;}
@@ -427,15 +434,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 .divider{border:none;border-top:1px solid var(--border);margin:14px 0;}
 ::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
-@media(max-width:380px){.srow{grid-template-columns:repeat(2,1fr);}}
 `;
 
 // ─── SELECT WITH OTHER ────────────────────────────────────────────────────────
 
 function SelectWithOther({ value, onChange, options, placeholder = "Select…" }) {
   const isCustom = value && !options.includes(value);
-  const [showCustom, setShowCustom] = useState(isCustom);
-  const [custom, setCustom] = useState(isCustom ? value : "");
+  const[showCustom, setShowCustom] = useState(isCustom);
+  const[custom, setCustom] = useState(isCustom ? value : "");
 
   function handleSel(e) {
     if (e.target.value === "__other__") { setShowCustom(true); onChange(""); }
@@ -462,21 +468,17 @@ function SelectWithOther({ value, onChange, options, placeholder = "Select…" }
 // ─── SITE MULTI-SELECT DROPDOWN ──────────────────────────────────────────────
 
 function SiteMultiSelect({ selected, onChange, sites }) {
-  const [open, setOpen]     = useState(false);
+  const[open, setOpen]     = useState(false);
   const [search, setSearch] = useState("");
 
   const filtered = sites.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.address.toLowerCase().includes(search.toLowerCase())
+    (s.address||"").toLowerCase().includes(search.toLowerCase()) ||
+    (s.builders||[]).some(b => b.toLowerCase().includes(search.toLowerCase()))
   );
 
-  function toggle(id) {
-    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
-  }
-
+  function toggle(id) { onChange(selected.includes(id) ? selected.filter(x => x !== id) :[...selected, id]); }
   function clear(e) { e.stopPropagation(); onChange([]); }
 
-  // Visible tags — show up to 2 then overflow count
   const selectedSites = sites.filter(s => selected.includes(s.id));
   const visibleTags   = selectedSites.slice(0, 2);
   const overflow      = selectedSites.length - 2;
@@ -491,7 +493,7 @@ function SiteMultiSelect({ selected, onChange, sites }) {
               <div className="ms-tags">
                 {visibleTags.map(s => (
                   <span key={s.id} className="ms-tag">
-                    {s.name}
+                    {s.address.split(",")[0]}
                     <button onClick={e => { e.stopPropagation(); toggle(s.id); }}>×</button>
                   </span>
                 ))}
@@ -505,32 +507,19 @@ function SiteMultiSelect({ selected, onChange, sites }) {
 
       {open && (
         <>
-          {/* Click-outside overlay */}
           <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => { setOpen(false); setSearch(""); }} />
           <div className="ms-dropdown">
-            <input
-              className="ms-search"
-              placeholder="🔍  Search sites…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onClick={e => e.stopPropagation()}
-              autoFocus
-            />
+            <input className="ms-search" placeholder="🔍  Search site addresses…" value={search} onChange={e => setSearch(e.target.value)} onClick={e => e.stopPropagation()} autoFocus />
             <div className="ms-list">
               {filtered.length === 0
                 ? <div style={{ padding:"14px", color:"var(--muted)", fontSize:13, textAlign:"center" }}>No sites found</div>
                 : filtered.map(s => (
-                  <div
-                    key={s.id}
-                    className={`ms-item${selected.includes(s.id) ? " checked" : ""}`}
-                    onClick={e => { e.stopPropagation(); toggle(s.id); }}
-                  >
+                  <div key={s.id} className={`ms-item${selected.includes(s.id) ? " checked" : ""}`} onClick={e => { e.stopPropagation(); toggle(s.id); }}>
                     <div className={`ms-check${selected.includes(s.id) ? " on" : ""}`}>
                       {selected.includes(s.id) && <span style={{ color:"#000", fontWeight:700, fontSize:11 }}>✓</span>}
                     </div>
                     <div>
-                      <div className="ms-item-name">{s.name}</div>
-                      <div className="ms-item-addr">📍 {s.address}</div>
+                      <div className="ms-item-name">{s.address}</div>
                     </div>
                   </div>
                 ))
@@ -538,9 +527,7 @@ function SiteMultiSelect({ selected, onChange, sites }) {
             </div>
             <div className="ms-footer">
               <span className="ms-count">{selected.length} SELECTED OF {sites.length}</span>
-              {selected.length > 0 && (
-                <button className="ms-clear" onClick={clear}>Clear All</button>
-              )}
+              {selected.length > 0 && <button className="ms-clear" onClick={clear}>Clear All</button>}
             </div>
           </div>
         </>
@@ -549,7 +536,60 @@ function SiteMultiSelect({ selected, onChange, sites }) {
   );
 }
 
+// ─── STRING MULTI-SELECT DROPDOWN ─────────────────────────────────────────────
 
+function StringMultiSelect({ selected =[], onChange, options =[], placeholder = "Select…" }) {
+  const [open, setOpen] = useState(false);
+  function toggle(val) { onChange(selected.includes(val) ? selected.filter(x => x !== val) :[...selected, val]); }
+  function clear(e) { e.stopPropagation(); onChange([]); }
+
+  return (
+    <div className="ms-wrap">
+      <div className={`ms-trigger${open ? " open" : ""}`} onClick={() => setOpen(o => !o)}>
+        <div className="ms-trigger-left">
+          {selected.length === 0
+            ? <span className="ms-placeholder">{placeholder}</span>
+            : (
+              <div className="ms-tags">
+                {selected.slice(0, 2).map(s => (
+                  <span key={s} className="ms-tag">
+                    {s}
+                    <button onClick={e => { e.stopPropagation(); toggle(s); }}>×</button>
+                  </span>
+                ))}
+                {selected.length > 2 && <span className="ms-overflow">+{selected.length - 2} more</span>}
+              </div>
+            )
+          }
+        </div>
+        <span className={`ms-arrow${open ? " open" : ""}`}>▼</span>
+      </div>
+
+      {open && (
+        <>
+          <div style={{ position:"fixed", inset:0, zIndex:99 }} onClick={() => setOpen(false)} />
+          <div className="ms-dropdown">
+            <div className="ms-list">
+              {options.length === 0 && <div style={{ padding:"14px", color:"var(--muted)", fontSize:13, textAlign:"center" }}>No options available</div>}
+              {options.map(o => (
+                <div key={o} className={`ms-item${selected.includes(o) ? " checked" : ""}`} onClick={e => { e.stopPropagation(); toggle(o); }}>
+                  <div className={`ms-check${selected.includes(o) ? " on" : ""}`}>
+                    {selected.includes(o) && <span style={{ color:"#000", fontWeight:700, fontSize:11 }}>✓</span>}
+                  </div>
+                  <div className="ms-item-name">{o}</div>
+                </div>
+              ))}
+            </div>
+            <div className="ms-footer">
+              <span className="ms-count">{selected.length} SELECTED</span>
+              {selected.length > 0 && <button className="ms-clear" onClick={clear}>Clear All</button>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function TypeBadge({ type }) {
   const t = LOG_TYPES.find(x => x.id === type);
@@ -567,84 +607,89 @@ function SevBadge({ severity }) {
 
 export default function App() {
   const [view, setView]         = useState("dashboard");
-  const [workers, setWorkers]   = useState(() => lsGet("pg_workers", DEFAULT_WORKERS));
-  const [sites,   setSites]     = useState(() => lsGet("pg_sites",   DEFAULT_SITES));
-  const [logs,    setLogs]      = useState(() => lsGet("pg_logs",    []));
-  const [profileId, setProfileId] = useState(null);
-  const [toast,   setToast]     = useState(null);
+  const[workers, setWorkers]   = useState(() => lsGet("pg_workers", DEFAULT_WORKERS));
+  const [sites, setSites]       = useState(() => {
+    const s = lsGet("pg_sites", DEFAULT_SITES);
+    return s.map(x => ({ ...x, address: x.address || x.name, builders: x.builders ||[], supervisor: x.supervisor || "" }));
+  });
+  const[logs, setLogs]         = useState(() => {
+    const l = lsGet("pg_logs",[]);
+    return l.filter(x => x.role !== "also");
+  });
+  const[profileId, setProfileId] = useState(null);
+  const[toast,   setToast]     = useState(null);
   const [smsModal, setSmsModal] = useState(null);
 
-  const [skillAreas,  setSkillAreas]  = useState(() => lsGet("pg_skills",   DEFAULT_SKILL_AREAS));
+  const[skillAreas,  setSkillAreas]  = useState(() => lsGet("pg_skills",   DEFAULT_SKILL_AREAS));
   const [grades,      setGrades]      = useState(() => lsGet("pg_grades",   DEFAULT_GRADES));
-  const [safeCats,    setSafeCats]    = useState(() => lsGet("pg_safecat",  DEFAULT_SAFETY_CATS));
+  const[safeCats,    setSafeCats]    = useState(() => lsGet("pg_safecat",  DEFAULT_SAFETY_CATS));
+  const[builders,    setBuilders]    = useState(() => lsGet("pg_builders", DEFAULT_BUILDERS));
+  const[supervisors, setSupervisors] = useState(() => lsGet("pg_supervisors", DEFAULT_SUPERVISORS));
 
   useEffect(() => { lsSet("pg_workers", workers); }, [workers]);
-  useEffect(() => { lsSet("pg_sites",   sites);   }, [sites]);
+  useEffect(() => { lsSet("pg_sites",   sites);   },[sites]);
   useEffect(() => { lsSet("pg_logs",    logs);     }, [logs]);
   useEffect(() => { lsSet("pg_skills",  skillAreas);  }, [skillAreas]);
   useEffect(() => { lsSet("pg_grades",  grades);      }, [grades]);
   useEffect(() => { lsSet("pg_safecat", safeCats);    }, [safeCats]);
+  useEffect(() => { lsSet("pg_builders", builders);   }, [builders]);
+  useEffect(() => { lsSet("pg_supervisors", supervisors); }, [supervisors]);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 2500); }
   function openProfile(id) { setProfileId(id); setView("profile"); }
-  function sName(id) { return sites.find(s => s.id === id)?.name || id || "—"; }
-  function wName(id) { return workers.find(w => w.id === id)?.name || "—"; }
-  function wLogs(id) { return logs.filter(l => l.workerId === id || (l.alsoResponsible || []).includes(id)); }
-  function primaryLogs(id) { return logs.filter(l => l.workerId === id); }
+  
+  function sName(id)      { return sites.find(s => s.id === id)?.address || id || "—"; }
+  function sNameShort(id) { const s = sites.find(x => x.id === id); return s ? s.address.split(",")[0] : (id || "—"); }
+  function wName(id)      { return workers.find(w => w.id === id)?.name || "—"; }
+  
+  function primaryLogs(id){ return logs.filter(l => l.workerId === id); }
+  function alsoLogs(id)   { return logs.filter(l => (l.alsoResponsible ||[]).includes(id)); }
 
   // ── LOG FORM ──────────────────────────────────────────────────────────────
 
   const blankForm = {
-    workerId: "", alsoResponsible: [], siteId: "", date: isoToday(),
-    types: [], severity: "minor", safetyCategory: "", skillArea: "",
+    workerId: "", alsoResponsible:[], siteId: "", date: isoToday(),
+    types:[], severity: "minor", safetyCategory: "", skillArea: "",
+    trainingComment: "", praiseComment: "", safetyComment: "",
     rating: 3, notes: "", followUp: false, photo: null,
   };
   const [form, setForm] = useState(blankForm);
   const sf = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   function toggleType(id) {
-    setForm(f => ({ ...f, types: f.types.includes(id) ? f.types.filter(t => t !== id) : [...f.types, id] }));
+    setForm(f => ({ ...f, types: f.types.includes(id) ? f.types.filter(t => t !== id) :[...f.types, id] }));
   }
   function toggleAlso(id) {
     setForm(f => ({
       ...f,
-      alsoResponsible: f.alsoResponsible.includes(id)
-        ? f.alsoResponsible.filter(x => x !== id)
-        : [...f.alsoResponsible, id]
+      alsoResponsible: f.alsoResponsible.includes(id) ? f.alsoResponsible.filter(x => x !== id) : [...f.alsoResponsible, id]
     }));
   }
 
-  const isDisc  = form.types.includes("discipline");
-  const isTrain = form.types.includes("training") || form.types.includes("praise");
+  const isDisc   = form.types.includes("discipline");
+  const isTrain  = form.types.includes("training");
+  const isPraise = form.types.includes("praise");
+  
   const isValid = form.workerId && form.siteId && form.types.length > 0 && form.notes.trim();
 
   function submitLog() {
-    const incidentId = uid();
     const site = sites.find(s => s.id === form.siteId);
-    // Primary log
-    const primaryLog = { id: incidentId, incidentId, role: "primary", siteName: site?.name, siteAddress: site?.address, ...form };
-    const newLogs = [primaryLog];
+    const primaryLog = { 
+      id: uid(), 
+      siteAddress: site?.address, 
+      builders: site?.builders ||[],
+      supervisor: site?.supervisor || "",
+      ...form 
+    };
 
-    // Also-responsible linked logs
-    form.alsoResponsible.forEach(wId => {
-      newLogs.push({
-        id: uid(), incidentId, role: "also",
-        workerId: wId, linkedPrimaryId: form.workerId,
-        alsoResponsible: [],
-        siteName: site?.name, siteAddress: site?.address,
-        siteId: form.siteId, date: form.date,
-        types: form.types, severity: form.severity,
-        safetyCategory: form.safetyCategory, skillArea: form.skillArea,
-        rating: form.rating, notes: form.notes, followUp: false, photo: null,
-      });
-    });
-
-    setLogs(p => [...newLogs, ...p]);
+    setLogs(p => [primaryLog, ...p]);
     setForm(blankForm);
     showToast("✓ Entry saved");
     if (isDisc) {
       const worker = workers.find(w => w.id === form.workerId);
-      setSmsModal({ worker, log: { ...primaryLog, siteName: site?.name } });
+      setSmsModal({ worker, log: primaryLog });
+    } else {
+      setView("dashboard");
     }
   }
 
@@ -657,37 +702,45 @@ export default function App() {
 
   // ── DASHBOARD DATA ────────────────────────────────────────────────────────
 
-  const [dashPeriod, setDashPeriod] = useState("week");
+  const[dashPeriod, setDashPeriod] = useState("week");
   const isCur = dashPeriod === "week" ? isThisWeek  : isThisMonth;
   const isPrv = dashPeriod === "week" ? isLastWeek  : isLastMonth;
-  const curLogs = useMemo(() => logs.filter(l => isCur(l.date)), [logs, isCur]);
+  const curLogs = useMemo(() => logs.filter(l => isCur(l.date)),[logs, isCur]);
   const prvLogs = useMemo(() => logs.filter(l => isPrv(l.date)), [logs, isPrv]);
 
   const typeCounts = useMemo(() => LOG_TYPES.map(t => ({
     ...t,
-    cur: curLogs.filter(l => (l.types || []).includes(t.id)).length,
-    prv: prvLogs.filter(l => (l.types || []).includes(t.id)).length,
-  })), [curLogs, prvLogs]);
+    cur: curLogs.filter(l => (l.types ||[]).includes(t.id)).length,
+    prv: prvLogs.filter(l => (l.types ||[]).includes(t.id)).length,
+  })),[curLogs, prvLogs]);
+
+  const pieData = typeCounts.filter(t => t.cur > 0).map(t => ({ name: t.label, value: t.cur, color: t.color }));
+
+  const sevData = SEVERITY_LEVELS.map(s => ({
+    name: s.label,
+    count: curLogs.filter(l => (l.types||[]).includes('discipline') && l.severity === s.id).length,
+    color: s.color
+  }));
 
   const siteCounts = useMemo(() => {
     const map = {};
-    logs.forEach(l => { const n = sName(l.siteId); map[n] = (map[n] || 0) + 1; });
+    logs.forEach(l => { const n = sNameShort(l.siteId); map[n] = (map[n] || 0) + 1; });
     return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([s, c]) => ({ s, c }));
   }, [logs, sites]);
 
   const employeeActivity = useMemo(() => workers.map(w => {
     const wl = primaryLogs(w.id);
     return {
-      name: w.name.split(" ")[0],
+      name: w.name, 
       training:   wl.filter(l => (l.types||[]).includes("training")).length,
       praise:     wl.filter(l => (l.types||[]).includes("praise")).length,
       discipline: wl.filter(l => (l.types||[]).includes("discipline")).length,
       other:      wl.filter(l => (l.types||[]).includes("other")).length,
     };
-  }), [workers, logs]);
+  }),[workers, logs]);
 
   const maxSite = siteCounts[0]?.c || 1;
-  const followUps = useMemo(() => logs.filter(l => l.followUp && l.role !== "also"), [logs]);
+  const followUps = useMemo(() => logs.filter(l => l.followUp), [logs]);
 
   // ════════════════════════════════════════════════════════════════════════════
   // DASHBOARD
@@ -701,7 +754,7 @@ export default function App() {
     }
     return (
       <div>
-        <div className="ptitle">DASH<span>BOARD</span></div>
+        <div className="ptitle">STAT<span>ISTICS</span></div>
         <div className="psub">⚡ PROGLOW FIELD ACTIVITY</div>
 
         <div className="trow">
@@ -720,12 +773,67 @@ export default function App() {
           ))}
         </div>
 
+        {pieData.length > 0 && (
+          <div className="card">
+            <div className="ctitle">Interactions Breakdown</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} stroke="var(--s1)">
+                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: "var(--s1)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 10, color: "var(--muted)" }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {sevData.some(s => s.count > 0) && (
+          <div className="card">
+            <div className="ctitle">Discipline Severities</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={sevData} margin={{ top: 10, right: 10, bottom: 0, left: -25 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} />
+                <YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} allowDecimals={false} />
+                <Tooltip cursor={{fill: 'var(--s2)'}} contentStyle={{ background: "var(--s1)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {sevData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        <div className="card">
+          <div className="ctitle">Activity by Employee</div>
+          {employeeActivity.every(e => e.training + e.praise + e.discipline + e.other === 0)
+            ? <div className="empty"><div className="empty-i">👷</div>No entries yet</div>
+            : (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={employeeActivity} margin={{ top: 4, right: 4, bottom: 40, left: -22 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 10 }} angle={-35} textAnchor="end" height={50} />
+                  <YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip contentStyle={{ background: "var(--s1)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 10, color: "var(--muted)", paddingBottom: 10 }} />
+                  <Bar dataKey="training"   fill="#C9A84C" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="praise"     fill="#ffffff" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="discipline" fill="#ff4d4d" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="other"      fill="#888888" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+        </div>
+
         {followUps.length > 0 && (
           <div className="card" style={{ borderColor: "#C9A84C40", background: "#C9A84C08" }}>
             <div className="ctitle" style={{ color: "var(--gold)" }}>🔔 Follow-ups Required ({followUps.length})</div>
             {followUps.slice(0, 3).map(l => (
               <div key={l.id} style={{ fontSize: 13, marginBottom: 5 }}>
-                <strong>{wName(l.workerId)?.split(" ")[0]}</strong> — {l.skillArea || l.safetyCategory || "General"}
+                <strong>{wName(l.workerId)}</strong> — {l.skillArea || l.safetyCategory || "General"}
                 <span style={{ color: "var(--muted)", marginLeft: 6 }}>{fmtDate(l.date)}</span>
               </div>
             ))}
@@ -734,59 +842,25 @@ export default function App() {
         )}
 
         <div className="card">
-          <div className="ctitle">Activity by Site</div>
-          {siteCounts.length === 0
-            ? <div className="empty"><div className="empty-i">📍</div>No site data yet</div>
-            : siteCounts.map(({ s, c }) => (
-              <div className="sbrow" key={s}>
-                <div className="sbname">{s}</div>
-                <div className="sbtrack"><div className="sbfill" style={{ width: `${(c / maxSite) * 100}%` }} /></div>
-                <div className="sbcount">{c}</div>
-              </div>
-            ))}
-        </div>
-
-        <div className="card">
-          <div className="ctitle">Activity by Employee</div>
-          {employeeActivity.every(e => e.training + e.praise + e.discipline + e.other === 0)
-            ? <div className="empty"><div className="empty-i">👷</div>No entries yet</div>
-            : (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={employeeActivity} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="name" tick={{ fill: "var(--muted)", fontSize: 11 }} />
-                  <YAxis tick={{ fill: "var(--muted)", fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "var(--s1)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 10, color: "var(--muted)" }} />
-                  <Bar dataKey="training"   fill="#C9A84C" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="praise"     fill="#6bcf8f" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="discipline" fill="#ff6b6b" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="other"      fill="#888888" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-        </div>
-
-        <div className="card">
           <div className="ctitle">Recent Entries</div>
           {logs.length === 0
             ? <div className="empty"><div className="empty-i">📋</div>No entries yet — tap Log to get started</div>
-            : logs.filter(l => l.role !== "also").slice(0, 5).map(l => (
+            : logs.slice(0, 5).map(l => (
               <div className="li" key={l.id}>
                 <div className="lih">
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {(l.types || []).map(t => <TypeBadge key={t} type={t} />)}
-                    {(l.types || []).includes("discipline") && <SevBadge severity={l.severity} />}
+                    {(l.types ||[]).map(t => <TypeBadge key={t} type={t} />)}
+                    {(l.types ||[]).includes("discipline") && <SevBadge severity={l.severity} />}
                   </div>
                   <div className="lir">{l.rating}/5</div>
                 </div>
                 <div className="lin">{l.notes}</div>
                 <div className="lim">
-                  <span>{wName(l.workerId)}</span>
-                  <span>{sName(l.siteId)}</span>
+                  <span style={{color:"var(--gold)"}}>{wName(l.workerId)}</span>
+                  <span>{sNameShort(l.siteId)}</span>
                   <span>{fmtDate(l.date)}</span>
-                  {l.followUp && <span className="fuf">🔔 Follow-up</span>}
-                  {(l.alsoResponsible || []).length > 0 && (
+                  {l.followUp && <span className="fuf">🔔</span>}
+                  {(l.alsoResponsible ||[]).length > 0 && (
                     <span className="also-linked">+{l.alsoResponsible.length} also present</span>
                   )}
                 </div>
@@ -812,7 +886,7 @@ export default function App() {
           {/* 1 — Worker */}
           <div className="fg">
             <label className="fl">1. Primary Responsible Worker</label>
-            <select className="fs" value={form.workerId} onChange={e => { sf("workerId", e.target.value); sf("alsoResponsible", []); }}>
+            <select className="fs" value={form.workerId} onChange={e => { sf("workerId", e.target.value); sf("alsoResponsible",[]); }}>
               <option value="">Select worker…</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.name} — {w.grade}</option>)}
             </select>
@@ -846,7 +920,7 @@ export default function App() {
             <label className="fl">2. Site / Address</label>
             <select className="fs" value={form.siteId} onChange={e => sf("siteId", e.target.value)}>
               <option value="">Select site…</option>
-              {sites.map(s => <option key={s.id} value={s.id}>{s.name} — {s.address}</option>)}
+              {sites.map(s => <option key={s.id} value={s.id}>{sNameShort(s.id)} — {s.address}</option>)}
             </select>
           </div>
 
@@ -872,18 +946,19 @@ export default function App() {
             </div>
           </div>
 
-          {/* Safety & Discipline fields */}
+          {/* Contextual Separated Detail Groups */}
           {isDisc && (
-            <>
+            <div className="ig ig-disc">
+              <div className="ig-title" style={{color:"var(--red)"}}>⚠️ Safety & Discipline Details</div>
               <div className="fg">
                 <label className="fl">Severity</label>
                 <div className="sevrow">
                   {SEVERITY_LEVELS.map(s => (
                     <div key={s.id}
                       className={`sevpill${form.severity === s.id ? " active" : ""}`}
-                      style={form.severity === s.id ? { borderColor: s.color, color: s.color, background: s.color + "12" } : {}}
+                      style={form.severity === s.id ? { borderColor: s.color, background: s.color } : {}}
                       onClick={() => sf("severity", s.id)}>
-                      {s.label}<span className="ss">{s.sub}</span>
+                      {s.label}
                     </div>
                   ))}
                 </div>
@@ -892,20 +967,41 @@ export default function App() {
                 <label className="fl">Safety / Discipline Category</label>
                 <SelectWithOther value={form.safetyCategory} onChange={v => sf("safetyCategory", v)} options={safeCats} placeholder="Select category…" />
               </div>
-            </>
-          )}
-
-          {/* Skill area for training/praise */}
-          {isTrain && (
-            <div className="fg">
-              <label className="fl">Skill Area</label>
-              <SelectWithOther value={form.skillArea} onChange={v => sf("skillArea", v)} options={skillAreas} placeholder="Select skill area…" />
+              <div className="fg" style={{marginBottom:0}}>
+                <label className="fl">Safety / Discipline Comments</label>
+                <textarea className="fta" placeholder="Specific details regarding this incident..." value={form.safetyComment} onChange={e => sf("safetyComment", e.target.value)} />
+              </div>
             </div>
           )}
 
-          {/* Rating */}
+          {isTrain && (
+             <div className="ig ig-train">
+              <div className="ig-title" style={{color:"var(--gold)"}}>📘 Training Details</div>
+              <div className="fg">
+                <label className="fl">Skill Area</label>
+                <SelectWithOther value={form.skillArea} onChange={v => sf("skillArea", v)} options={skillAreas} placeholder="Select skill area…" />
+              </div>
+              <div className="fg" style={{marginBottom:0}}>
+                <label className="fl">Training Comments</label>
+                <textarea className="fta" placeholder="What was covered or demonstrated..." value={form.trainingComment} onChange={e => sf("trainingComment", e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {isPraise && (
+             <div className="ig ig-praise">
+              <div className="ig-title" style={{color:"#fff"}}>⭐ Praise Details</div>
+              <div className="fg" style={{marginBottom:0}}>
+                <label className="fl">Praise Comments</label>
+                <textarea className="fta" placeholder="What was done well..." value={form.praiseComment} onChange={e => sf("praiseComment", e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {/* Rating (Always visible) */}
           <div className="fg">
-            <label className="fl">Performance Rating</label>
+            <label className="fl" style={{fontSize: 14, color: "var(--gold)", letterSpacing:"1px"}}>Team Rating</label>
+            <div style={{fontSize: 11, color: "var(--muted)", marginBottom: 10}}>Based on how well the team is working together, everyone has a task and a plan for the day, etc.</div>
             <div className="rrow">
               {[1, 2, 3, 4, 5].map(n => (
                 <button key={n} className={`rbtn${form.rating === n ? " active" : ""}`} onClick={() => sf("rating", n)}>{n}</button>
@@ -914,11 +1010,11 @@ export default function App() {
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Notes (Always visible) */}
           <div className="fg">
-            <label className="fl">Notes</label>
+            <label className="fl">General Notes & Observations</label>
             <textarea className="fta"
-              placeholder={isDisc ? "Describe the incident clearly — used for formal notice…" : "What was covered, observed or discussed…"}
+              placeholder="General context, overall day progress..."
               value={form.notes} onChange={e => sf("notes", e.target.value)} />
           </div>
 
@@ -954,12 +1050,13 @@ export default function App() {
 
   function Team() {
     const [showAdd, setShowAdd] = useState(false);
-    const [af, setAf] = useState({ name: "", grade: grades[0], siteId: sites[0]?.id || "", apprenticeStart: String(new Date().getFullYear()) });
+    const[af, setAf] = useState({ name: "", grade: grades[0] });
 
     function addWorker() {
       if (!af.name.trim()) return;
-      setWorkers(p => [...p, { id: uid(), ...af, sites: [af.siteId], competencies: [] }]);
+      setWorkers(p =>[...p, { id: uid(), ...af, competencies:[] }]);
       setShowAdd(false); showToast("✓ Worker added");
+      setAf({ name: "", grade: grades[0] });
     }
 
     return (
@@ -970,14 +1067,13 @@ export default function App() {
 
         {workers.map(w => {
           const wl = primaryLogs(w.id);
-          const reps = wl.filter(l => (l.types || []).includes("discipline"));
+          const reps = wl.filter(l => (l.types ||[]).includes("discipline"));
           return (
             <div className="wcard" key={w.id} onClick={() => openProfile(w.id)}>
               <div className="wav">👷</div>
               <div className="wmeta">
                 <div className="wname">{w.name}</div>
                 <div className="wgrade">{w.grade}</div>
-                <div className="wsites">{(w.sites || []).map(id => sName(id)).join(" · ")}</div>
                 {reps.length > 0 && <div style={{ fontSize: 11, color: "var(--red)", marginTop: 3 }}>⚠️ {reps.length} discipline log{reps.length > 1 ? "s" : ""}</div>}
               </div>
               <div className="wstat">
@@ -1000,13 +1096,6 @@ export default function App() {
                   {grades.map(g => <option key={g}>{g}</option>)}
                 </select>
               </div>
-              <div className="fg">
-                <label className="fl">Primary Site</label>
-                <select className="fs" value={af.siteId} onChange={e => setAf(f => ({ ...f, siteId: e.target.value }))}>
-                  {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div className="fg"><label className="fl">Apprenticeship Start Year</label><input className="fi" type="number" value={af.apprenticeStart} onChange={e => setAf(f => ({ ...f, apprenticeStart: e.target.value }))} /></div>
               <div className="mactions">
                 <button className="btn-s" onClick={() => setShowAdd(false)}>Cancel</button>
                 <button className="btn-p" style={{ flex: 1 }} onClick={addWorker}>ADD WORKER</button>
@@ -1023,18 +1112,20 @@ export default function App() {
   // ════════════════════════════════════════════════════════════════════════════
 
   function SitesView() {
-    const [showAdd, setShowAdd] = useState(false);
+    const[showAdd, setShowAdd] = useState(false);
     const [editId, setEditId]   = useState(null);
-    const [af, setAf] = useState({ name: "", address: "", type: "Commercial" });
+    const[af, setAf] = useState({ address: "", builders:[], supervisor: "" });
 
-    function openAdd()    { setAf({ name: "", address: "", type: "Commercial" }); setEditId(null); setShowAdd(true); }
-    function openEdit(s)  { setAf({ name: s.name, address: s.address, type: s.type }); setEditId(s.id); setShowAdd(true); }
+    function openAdd()    { setAf({ address: "", builders:[], supervisor: "" }); setEditId(null); setShowAdd(true); }
+    function openEdit(s)  { setAf({ address: s.address, builders: s.builders ||[], supervisor: s.supervisor || "" }); setEditId(s.id); setShowAdd(true); }
+    
     function save() {
-      if (!af.name.trim()) return;
+      if (!af.address.trim()) return;
       if (editId) { setSites(p => p.map(s => s.id === editId ? { ...s, ...af } : s)); showToast("✓ Site updated"); }
-      else         { setSites(p => [...p, { id: uid(), ...af }]); showToast("✓ Site added"); }
+      else        { setSites(p =>[...p, { id: uid(), ...af }]); showToast("✓ Site added"); }
       setShowAdd(false);
     }
+    
     function deleteSite(id) {
       if (!window.confirm("Delete this site?")) return;
       setSites(p => p.filter(s => s.id !== id)); showToast("Site deleted");
@@ -1047,21 +1138,21 @@ export default function App() {
         <button className="btn-s btn-full" style={{ marginBottom: 14, padding: 12 }} onClick={openAdd}>＋ Add Site</button>
 
         {sites.map(s => {
-          const cnt = logs.filter(l => l.siteId === s.id && l.role !== "also").length;
+          const cnt = logs.filter(l => l.siteId === s.id).length;
           return (
             <div className="scrd" key={s.id}>
               <div className="scrd-top">
-                <div>
-                  <div className="sname">{s.name}</div>
-                  <div className="saddr">📍 {s.address}</div>
-                  <div className="stype">{s.type}</div>
+                <div style={{ paddingRight: 10 }}>
+                  <div className="sname">{s.address}</div>
+                  <div className="saddr">Builders: {(s.builders||[]).join(", ") || "None"}</div>
+                  <div className="stype">Supervisor: {s.supervisor || "Unassigned"}</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
                   <div style={{ fontFamily: "var(--fh)", fontSize: 22, color: "var(--gold)" }}>{cnt}</div>
                   <div style={{ fontFamily: "var(--fm)", fontSize: 9, color: "var(--muted)" }}>logs</div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button className="btn-s" onClick={() => openEdit(s)}>Edit</button>
                 <button className="btn-d" onClick={() => deleteSite(s.id)}>Delete</button>
               </div>
@@ -1074,13 +1165,17 @@ export default function App() {
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="mhandle" />
               <div className="mtitle">{editId ? "EDIT SITE" : "ADD SITE"}</div>
-              <div className="fg"><label className="fl">Site Name</label><input className="fi" placeholder="e.g. Westside Shopping Centre" value={af.name} onChange={e => setAf(f => ({ ...f, name: e.target.value }))} /></div>
-              <div className="fg"><label className="fl">Address</label><input className="fi" placeholder="e.g. 123 Main St, Melbourne VIC 3000" value={af.address} onChange={e => setAf(f => ({ ...f, address: e.target.value }))} /></div>
               <div className="fg">
-                <label className="fl">Site Type</label>
-                <select className="fs" value={af.type} onChange={e => setAf(f => ({ ...f, type: e.target.value }))}>
-                  {SITE_TYPES.map(t => <option key={t}>{t}</option>)}
-                </select>
+                <label className="fl">Job Address (Primary Reference)</label>
+                <input className="fi" placeholder="e.g. 123 Main St, Melbourne VIC 3000" value={af.address} onChange={e => setAf(f => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div className="fg">
+                <label className="fl">Builder(s)</label>
+                <StringMultiSelect selected={af.builders} onChange={v => setAf(f => ({ ...f, builders: v }))} options={builders} placeholder="Select Builder(s)..." />
+              </div>
+              <div className="fg">
+                <label className="fl">Supervisor</label>
+                <SelectWithOther value={af.supervisor} onChange={v => setAf(f => ({ ...f, supervisor: v }))} options={supervisors} placeholder="Select Supervisor..." />
               </div>
               <div className="mactions">
                 <button className="btn-s" onClick={() => setShowAdd(false)}>Cancel</button>
@@ -1099,70 +1194,77 @@ export default function App() {
 
   function Reports() {
     const [filters, setFilters] = useState({
-      workers: [],
+      workers:[],
       types: [],
-      sites: [],
+      sites:[],
       skillArea: "",
       severity: "",
-      dateFrom: "",
-      dateTo: "",
-      role: "all", // all | primary | also
+      dateFrom: isoSixMonthsAgo(),
+      dateTo: isoToday(),
+      role: "all", 
       followUpOnly: false,
     });
-    const [previewMode, setPreviewMode] = useState(false);
+    const[previewMode, setPreviewMode] = useState(false);
 
     function toggleArr(key, val) {
-      setFilters(f => ({ ...f, [key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }));
+      setFilters(f => ({ ...f,[key]: f[key].includes(val) ? f[key].filter(x => x !== val) : [...f[key], val] }));
     }
 
     const filtered = useMemo(() => {
       return logs.filter(l => {
-        if (filters.workers.length   && !filters.workers.includes(l.workerId)) return false;
+        const isPrim = filters.workers.includes(l.workerId);
+        const isAlso = (l.alsoResponsible||[]).some(w => filters.workers.includes(w));
+
+        if (filters.workers.length > 0) {
+          if (filters.role === "primary" && !isPrim) return false;
+          if (filters.role === "also" && !isAlso) return false;
+          if (filters.role === "all" && !isPrim && !isAlso) return false;
+        } else {
+          if (filters.role === "also" && !(l.alsoResponsible?.length > 0)) return false;
+        }
+
         if (filters.types.length     && !filters.types.some(t => (l.types||[]).includes(t))) return false;
         if (filters.sites.length     && !filters.sites.includes(l.siteId)) return false;
         if (filters.skillArea        && l.skillArea !== filters.skillArea && l.safetyCategory !== filters.skillArea) return false;
         if (filters.severity         && l.severity !== filters.severity) return false;
         if (filters.dateFrom         && l.date < filters.dateFrom) return false;
         if (filters.dateTo           && l.date > filters.dateTo) return false;
-        if (filters.role === "primary" && l.role === "also") return false;
-        if (filters.role === "also"    && l.role !== "also") return false;
         if (filters.followUpOnly     && !l.followUp) return false;
         return true;
       });
     }, [logs, filters]);
 
-    const reportRows = useMemo(() => filtered.map(l => ({
-      ...l,
-      workerName: wName(l.workerId),
-      siteName:   sName(l.siteId),
-    })), [filtered]);
+    const reportRows = useMemo(() => filtered.map(l => {
+      const site = sites.find(s => s.id === l.siteId);
+      return {
+        ...l,
+        workerName: wName(l.workerId),
+        alsoNames: (l.alsoResponsible ||[]).map(id => wName(id)),
+        siteAddress: sName(l.siteId),
+        builders: site?.builders ||[],
+        supervisor: site?.supervisor || ""
+      }
+    }),[filtered, sites, workers]);
 
-    const activeFilterCount = [
+    const activeFilterCount =[
       filters.workers.length > 0, filters.types.length > 0, filters.sites.length > 0,
-      !!filters.skillArea, !!filters.severity, !!filters.dateFrom || !!filters.dateTo,
+      !!filters.skillArea, !!filters.severity, 
+      (filters.dateFrom !== isoSixMonthsAgo() || filters.dateTo !== isoToday()),
       filters.role !== "all", filters.followUpOnly,
     ].filter(Boolean).length;
 
     function buildMetaString() {
-      const parts = [];
+      const parts =[];
       if (filters.workers.length)  parts.push(`Workers: ${filters.workers.map(wName).join(", ")}`);
       if (filters.types.length)    parts.push(`Types: ${filters.types.map(t => LOG_TYPES.find(x=>x.id===t)?.label).join(", ")}`);
-      if (filters.sites.length)    parts.push(`Sites: ${filters.sites.map(sName).join(", ")}`);
-      if (filters.skillArea)       parts.push(`Skill: ${filters.skillArea}`);
+      if (filters.sites.length)    parts.push(`Sites: ${filters.sites.map(sNameShort).join(", ")}`);
+      if (filters.skillArea)       parts.push(`Skill/Cat: ${filters.skillArea}`);
       if (filters.severity)        parts.push(`Severity: ${filters.severity}`);
       if (filters.dateFrom)        parts.push(`From: ${fmtDate(filters.dateFrom)}`);
       if (filters.dateTo)          parts.push(`To: ${fmtDate(filters.dateTo)}`);
       if (filters.role !== "all")  parts.push(`Role: ${filters.role === "primary" ? "Primary Only" : "Also Responsible Only"}`);
       if (filters.followUpOnly)    parts.push("Follow-ups only");
       return parts.length ? parts.join(" · ") : "All records";
-    }
-
-    function copyText() {
-      const lines = reportRows.map(r =>
-        `${fmtDate(r.date)} | ${r.workerName} | ${r.role==="also"?"Also Responsible":"Primary"} | ${(r.types||[]).join("+")} | ${r.siteName} | ${r.skillArea||r.safetyCategory||""} | Rating:${r.rating}/5 | ${r.notes}`
-      ).join("\n");
-      const header = `ProGlow Electrics — Field Log Report\n${buildMetaString()}\n${reportRows.length} records\n${"─".repeat(80)}\n`;
-      navigator.clipboard.writeText(header + lines).then(() => showToast("✓ Copied to clipboard"));
     }
 
     return (
@@ -1174,15 +1276,14 @@ export default function App() {
         <div className="card gold-border" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div className="results-count">{filtered.length}</div>
-            <div className="result-sub">RECORDS MATCH{activeFilterCount > 0 ? ` · ${activeFilterCount} FILTER${activeFilterCount>1?"S":""} ACTIVE` : " · ALL RECORDS"}</div>
+            <div className="result-sub">RECORDS MATCH{activeFilterCount > 0 ? ` · ${activeFilterCount} FILTER${activeFilterCount>1?"S":""} ACTIVE` : " · DEFAULT RANGE"}</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexDirection: "column", alignItems: "flex-end" }}>
             <button className="btn-g" onClick={() => { setPreviewMode(true); }}>👁 Preview</button>
             {filtered.length > 0 && (
-              <>
-                <button className="btn-s" onClick={() => printReport("Field Log Report", reportRows, buildMetaString())}>🖨 Print / PDF</button>
-                <button className="btn-s" onClick={copyText}>📋 Copy Text</button>
-              </>
+              <button className="btn-s" style={{color:"var(--text)", borderColor:"var(--text)"}} onClick={() => printReport("Field Log Report", reportRows, buildMetaString())}>
+                🖨 Print / Save as PDF
+              </button>
             )}
           </div>
         </div>
@@ -1192,9 +1293,8 @@ export default function App() {
           <div className="rf-title">Filter by Worker</div>
           <div className="filter-chips">
             {workers.map(w => (
-              <div key={w.id} className={`fchip${filters.workers.includes(w.id) ? " on" : ""}`}
-                onClick={() => toggleArr("workers", w.id)}>
-                👷 {w.name.split(" ")[0]}
+              <div key={w.id} className={`fchip${filters.workers.includes(w.id) ? " on" : ""}`} onClick={() => toggleArr("workers", w.id)}>
+                👷 {w.name}
               </div>
             ))}
           </div>
@@ -1204,9 +1304,8 @@ export default function App() {
         <div className="rf-section">
           <div className="rf-title">Filter by Role in Incident</div>
           <div className="filter-chips">
-            {[["all","All Roles"],["primary","Primary Responsible"],["also","Also Responsible / On-Site"]].map(([val, label]) => (
-              <div key={val} className={`fchip${filters.role === val ? " on" : ""}`}
-                onClick={() => setFilters(f => ({ ...f, role: val }))}>
+            {[["all","Any Role"],["primary","Primary Responsible Only"],["also","Also Responsible / On-Site Only"]].map(([val, label]) => (
+              <div key={val} className={`fchip${filters.role === val ? " on" : ""}`} onClick={() => setFilters(f => ({ ...f, role: val }))}>
                 {label}
               </div>
             ))}
@@ -1218,23 +1317,8 @@ export default function App() {
           <div className="rf-title">Filter by Interaction Type</div>
           <div className="filter-chips">
             {LOG_TYPES.map(t => (
-              <div key={t.id} className={`fchip${filters.types.includes(t.id) ? " on" : ""}`}
-                onClick={() => toggleArr("types", t.id)}>
+              <div key={t.id} className={`fchip${filters.types.includes(t.id) ? " on" : ""}`} onClick={() => toggleArr("types", t.id)}>
                 {t.icon} {t.label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Filter: Severity */}
-        <div className="rf-section">
-          <div className="rf-title">Filter by Severity (Discipline)</div>
-          <div className="filter-chips">
-            <div className={`fchip${filters.severity === "" ? " on" : ""}`} onClick={() => setFilters(f => ({ ...f, severity: "" }))}>Any</div>
-            {SEVERITY_LEVELS.map(s => (
-              <div key={s.id} className={`fchip${filters.severity === s.id ? " on" : ""}`}
-                onClick={() => setFilters(f => ({ ...f, severity: s.id }))}>
-                {s.label}
               </div>
             ))}
           </div>
@@ -1243,25 +1327,7 @@ export default function App() {
         {/* Filter: Sites */}
         <div className="rf-section">
           <div className="rf-title">Filter by Site</div>
-          <SiteMultiSelect
-            selected={filters.sites}
-            onChange={val => setFilters(f => ({ ...f, sites: val }))}
-            sites={sites}
-          />
-        </div>
-
-        {/* Filter: Skill Area */}
-        <div className="rf-section">
-          <div className="rf-title">Filter by Skill Area</div>
-          <div className="filter-chips">
-            <div className={`fchip${!filters.skillArea ? " on" : ""}`} onClick={() => setFilters(f => ({ ...f, skillArea: "" }))}>Any</div>
-            {skillAreas.map(s => (
-              <div key={s} className={`fchip${filters.skillArea === s ? " on" : ""}`}
-                onClick={() => setFilters(f => ({ ...f, skillArea: s }))}>
-                {s}
-              </div>
-            ))}
-          </div>
+          <SiteMultiSelect selected={filters.sites} onChange={val => setFilters(f => ({ ...f, sites: val }))} sites={sites} />
         </div>
 
         {/* Filter: Date Range */}
@@ -1273,57 +1339,79 @@ export default function App() {
           </div>
         </div>
 
-        {/* Filter: Follow-up only */}
+        {/* Filter: Skill Area */}
         <div className="rf-section">
-          <div className="rf-title">Other Filters</div>
-          <label className="cbrow" onClick={() => setFilters(f => ({ ...f, followUpOnly: !f.followUpOnly }))}>
-            <div className={`cbbox${filters.followUpOnly ? " on" : ""}`}>{filters.followUpOnly && <span style={{ color: "#000", fontWeight: 700, fontSize: 13 }}>✓</span>}</div>
-            <span className="cblbl">🔔 Follow-up flagged entries only</span>
-          </label>
+          <div className="rf-title">Filter by Skill Area</div>
+          <div className="filter-chips">
+            <div className={`fchip${!filters.skillArea ? " on" : ""}`} onClick={() => setFilters(f => ({ ...f, skillArea: "" }))}>Any</div>
+            {skillAreas.map(s => (
+              <div key={s} className={`fchip${filters.skillArea === s ? " on" : ""}`} onClick={() => setFilters(f => ({ ...f, skillArea: s }))}>
+                {s}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Reset */}
         {activeFilterCount > 0 && (
-          <button className="btn-d btn-full" style={{ padding: 12 }}
-            onClick={() => setFilters({ workers:[], types:[], sites:[], skillArea:"", severity:"", dateFrom:"", dateTo:"", role:"all", followUpOnly:false })}>
+          <button className="btn-d btn-full" style={{ padding: 12, marginTop: 16 }} onClick={() => setFilters({ workers:[], types:[], sites:[], skillArea:"", severity:"", dateFrom:isoSixMonthsAgo(), dateTo:isoToday(), role:"all", followUpOnly:false })}>
             Reset All Filters
           </button>
         )}
 
-        {/* Preview Modal */}
+        {/* Browser Document Preview Modal */}
         {previewMode && (
           <div className="moverlay" onClick={() => setPreviewMode(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{maxWidth: 700}}>
               <div className="mhandle" />
-              <div className="mtitle">REPORT PREVIEW</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--fm)", marginBottom: 14 }}>{buildMetaString()}</div>
-              {filtered.length === 0
-                ? <div className="empty"><div className="empty-i">🔍</div>No records match these filters</div>
-                : filtered.slice(0, 20).map(l => (
-                  <div className="li" key={l.id} style={l.role === "also" ? { borderLeft: "3px solid var(--gold)" } : {}}>
-                    <div className="lih">
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {(l.types || []).map(t => <TypeBadge key={t} type={t} />)}
-                        {l.role === "also" && <span className="also-linked">Also Responsible</span>}
-                      </div>
-                      <div className="lir">{l.rating}/5</div>
-                    </div>
-                    <div className="lin">{l.notes}</div>
-                    <div className="lim">
-                      <span>{wName(l.workerId)}</span>
-                      <span>{sName(l.siteId)}</span>
-                      <span>{fmtDate(l.date)}</span>
-                      {l.followUp && <span className="fuf">🔔</span>}
-                    </div>
+              <div className="mtitle" style={{marginBottom:4}}>REPORT PREVIEW</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--fm)", marginBottom: 18, lineHeight:1.5 }}>{buildMetaString()}</div>
+              
+              <div style={{background:"#fff", color:"#000", padding:16, borderRadius:8, fontFamily:"var(--fb)"}}>
+                <div style={{borderBottom:"2px solid #000", paddingBottom:10, marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                  <div>
+                    <div style={{fontFamily:"var(--fh)", fontSize:20}}>FIELD LOG REPORT</div>
+                    <div style={{fontSize:10, color:"#666"}}>{filtered.length} Records Documented</div>
                   </div>
-                ))
-              }
-              {filtered.length > 20 && <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 12, marginTop: 8 }}>Showing 20 of {filtered.length} — export for full results</div>}
-              <div className="mactions" style={{ marginTop: 14 }}>
-                <button className="btn-s" onClick={() => setPreviewMode(false)}>Close</button>
-                <button className="btn-p" style={{ flex: 1 }} onClick={() => { printReport("Field Log Report", reportRows, buildMetaString()); }}>🖨 PRINT / PDF</button>
+                  <div style={{fontSize:10, textAlign:"right"}}>
+                    ProGlow Electrics<br/>Generated: {fmtDate(new Date())}
+                  </div>
+                </div>
+
+                {filtered.length === 0
+                  ? <div className="empty" style={{color:"#555"}}><div className="empty-i">🔍</div>No records match these filters</div>
+                  : filtered.slice(0, 15).map(l => {
+                      return (
+                        <div key={l.id} style={{borderBottom:"1px solid #eee", paddingBottom:12, marginBottom:12}}>
+                          <div style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                            <div style={{fontSize:11, fontWeight:700}}>{fmtDate(l.date)} — {sNameShort(l.siteId)}</div>
+                            <div style={{fontSize:10}}>{(l.types||[]).map(t => LOG_TYPES.find(x=>x.id===t)?.label).join(", ")}</div>
+                          </div>
+                          <div style={{fontSize:12, marginBottom:6}}>
+                            <span style={{fontWeight:600}}>{wName(l.workerId)}</span> 
+                            {(l.alsoResponsible||[]).length > 0 && <span style={{color:"#555"}}> (Also: {(l.alsoResponsible||[]).map(wName).join(", ")})</span>}
+                          </div>
+                          <div style={{fontSize:11, color:"#333", lineHeight:1.4}}>
+                            {l.trainingComment && <div style={{marginBottom:4}}><strong>Training:</strong> {l.trainingComment}</div>}
+                            {l.praiseComment && <div style={{marginBottom:4}}><strong>Praise:</strong> {l.praiseComment}</div>}
+                            {l.safetyComment && <div style={{marginBottom:4}}><strong>Safety:</strong> {l.safetyComment}</div>}
+                            {l.notes && <div><strong>General:</strong> {l.notes}</div>}
+                          </div>
+                          {l.photo && <img src={l.photo} style={{maxHeight: 100, borderRadius: 4, marginTop: 8, border: "1px solid #ccc"}}/>}
+                          <div style={{fontSize:10, color:"#666", marginTop:4}}>
+                            Team Rating: {l.rating}/5 | {l.skillArea || l.safetyCategory || "General"}
+                          </div>
+                        </div>
+                      )
+                    })
+                }
+                {filtered.length > 15 && <div style={{ textAlign: "center", color: "#666", fontSize: 11, marginTop: 8, fontStyle:"italic" }}>Showing 15 of {filtered.length} — print for full results</div>}
               </div>
-              <button className="btn-s btn-full" style={{ marginTop: 8 }} onClick={copyText}>📋 Copy to Clipboard</button>
+
+              <div className="mactions" style={{ marginTop: 24 }}>
+                <button className="btn-s" onClick={() => setPreviewMode(false)}>Close Preview</button>
+                <button className="btn-p" style={{ flex: 1, background:"#fff" }} onClick={() => { printReport("Field Log Report", reportRows, buildMetaString()); }}>🖨 PRINT / SAVE AS PDF</button>
+              </div>
             </div>
           </div>
         )}
@@ -1338,12 +1426,15 @@ export default function App() {
   function Profile() {
     const worker = workers.find(w => w.id === profileId);
     if (!worker) return null;
-    const wl   = primaryLogs(worker.id);
-    const also = logs.filter(l => l.role === "also" && l.workerId === worker.id);
-    const reps = wl.filter(l => (l.types || []).includes("discipline"));
-    const trains = wl.filter(l => (l.types || []).includes("training"));
-    const avg  = wl.length ? (wl.reduce((a, b) => a + b.rating, 0) / wl.length).toFixed(1) : "—";
-    const [tab, setTab] = useState("overview");
+    
+    const[tab, setTab] = useState("overview");
+    const[showEdit, setShowEdit] = useState(false);
+    const[editWf, setEditWf] = useState({});
+
+    const wl     = primaryLogs(worker.id);
+    const also   = alsoLogs(worker.id);
+    const reps   = wl.filter(l => (l.types ||[]).includes("discipline"));
+    const avg    = wl.length ? (wl.reduce((a, b) => a + b.rating, 0) / wl.length).toFixed(1) : "—";
 
     const radar = DEFAULT_SKILL_AREAS.map(skill => {
       const rel = wl.filter(l => l.skillArea === skill);
@@ -1355,16 +1446,41 @@ export default function App() {
       setWorkers(p => p.map(w => w.id === worker.id ? { ...w, competencies: w.competencies.includes(c) ? w.competencies.filter(x => x !== c) : [...w.competencies, c] } : w));
     }
 
+    function openEditWorker() {
+      setEditWf({ name: worker.name, grade: worker.grade });
+      setShowEdit(true);
+    }
+    
+    function saveEditWorker() {
+      if (!editWf.name.trim()) return;
+      setWorkers(p => p.map(w => w.id === worker.id ? { ...w, name: editWf.name, grade: editWf.grade } : w));
+      setShowEdit(false);
+      showToast("✓ Profile updated");
+    }
+
+    function deleteWorker() {
+      if (!window.confirm(`Delete profile for ${worker.name}?\nTheir existing logs will remain, but their name may not fully display.`)) return;
+      setWorkers(p => p.filter(w => w.id !== worker.id));
+      setView("team");
+      showToast("Profile deleted");
+    }
+
     return (
       <div>
         <button className="btn-s" style={{ marginBottom: 14 }} onClick={() => setView("team")}>← Back</button>
+        
         <div className="phdr">
           <div className="pav">👷</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div className="pname">{worker.name}</div>
-            <div className="pgrade">{worker.grade} · Since {worker.apprenticeStart}</div>
-            <div style={{ fontSize: 11, color: "var(--gold)", marginTop: 3, fontFamily: "var(--fm)" }}>{(worker.sites || []).map(id => sName(id)).join(" · ")}</div>
+            <div className="pgrade">{worker.grade}</div>
           </div>
+        </div>
+
+        {/* Profile Action Buttons */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <button className="btn-s" style={{ flex: 1 }} onClick={openEditWorker}>✏️ Edit Profile</button>
+          <button className="btn-d" style={{ padding: "9px 12px" }} onClick={deleteWorker}>🗑 Delete</button>
         </div>
 
         <div className="srow">
@@ -1419,18 +1535,21 @@ export default function App() {
                   <div className="li" key={l.id}>
                     <div className="lih">
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {(l.types || []).map(t => <TypeBadge key={t} type={t} />)}
-                        {(l.types || []).includes("discipline") && <SevBadge severity={l.severity} />}
+                        {(l.types ||[]).map(t => <TypeBadge key={t} type={t} />)}
+                        {(l.types ||[]).includes("discipline") && <SevBadge severity={l.severity} />}
                       </div>
                       <div className="lir">{l.rating}/5</div>
                     </div>
-                    <div className="lin">{l.notes}</div>
-                    <div className="lim">
+                    {l.trainingComment && <div style={{fontSize:12, marginBottom:4, color:"#ccc"}}><strong>Train:</strong> {l.trainingComment}</div>}
+                    {l.praiseComment && <div style={{fontSize:12, marginBottom:4, color:"#ccc"}}><strong>Praise:</strong> {l.praiseComment}</div>}
+                    {l.safetyComment && <div style={{fontSize:12, marginBottom:4, color:"#ccc"}}><strong>Safety:</strong> {l.safetyComment}</div>}
+                    {l.notes && <div className="lin">{l.notes}</div>}
+                    <div className="lim" style={{marginTop:8}}>
                       <span>{l.skillArea || l.safetyCategory || ""}</span>
-                      <span>{sName(l.siteId)}</span>
+                      <span>{sNameShort(l.siteId)}</span>
                       <span>{fmtDate(l.date)}</span>
                       {l.followUp && <span className="fuf">🔔</span>}
-                      {(l.alsoResponsible || []).length > 0 && (
+                      {(l.alsoResponsible ||[]).length > 0 && (
                         <span className="also-linked">+{l.alsoResponsible.length} also on-site</span>
                       )}
                     </div>
@@ -1452,10 +1571,10 @@ export default function App() {
                     <SevBadge severity={l.severity} />
                     <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--fm)" }}>{fmtDate(l.date)}</span>
                   </div>
-                  <div style={{ fontSize: 14, marginBottom: 6 }}>{l.notes}</div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--fm)" }}>{l.safetyCategory} · {sName(l.siteId)}</div>
+                  <div style={{ fontSize: 14, marginBottom: 6 }}>{l.safetyComment || l.notes}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--fm)" }}>{l.safetyCategory} · {sNameShort(l.siteId)}</div>
                   <button className="btn-s" style={{ marginTop: 10, fontSize: 10 }}
-                    onClick={() => setSmsModal({ worker, log: { ...l, siteName: sName(l.siteId) } })}>
+                    onClick={() => setSmsModal({ worker, log: { ...l, siteAddress: sName(l.siteId) } })}>
                     📤 View / Resend Notice
                   </button>
                 </div>
@@ -1468,25 +1587,22 @@ export default function App() {
             <div className="ctitle">Incidents Where Also On-Site</div>
             {also.length === 0
               ? <div className="empty"><div className="empty-i">👥</div>No linked incidents</div>
-              : also.map(l => {
-                const primaryW = workers.find(w => w.id === l.linkedPrimaryId);
-                return (
-                  <div className="li linked" key={l.id}>
-                    <div className="lih">
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        {(l.types || []).map(t => <TypeBadge key={t} type={t} />)}
-                        <span className="also-linked">Also Responsible</span>
-                      </div>
-                      <div className="lir">{l.rating}/5</div>
+              : also.map(l => (
+                <div className="li linked" key={l.id}>
+                  <div className="lih">
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {(l.types ||[]).map(t => <TypeBadge key={t} type={t} />)}
+                      <span className="also-linked">Also Responsible</span>
                     </div>
-                    <div className="lin">{l.notes}</div>
-                    <div style={{ fontSize: 11, color: "var(--gold)", fontFamily: "var(--fm)", marginBottom: 4 }}>
-                      Primary: {primaryW?.name || "—"}
-                    </div>
-                    <div className="lim"><span>{sName(l.siteId)}</span><span>{fmtDate(l.date)}</span></div>
+                    <div className="lir">{l.rating}/5</div>
                   </div>
-                );
-              })}
+                  <div className="lin">{l.notes}</div>
+                  <div style={{ fontSize: 11, color: "var(--gold)", fontFamily: "var(--fm)", marginBottom: 4 }}>
+                    Primary: {wName(l.workerId)}
+                  </div>
+                  <div className="lim"><span>{sNameShort(l.siteId)}</span><span>{fmtDate(l.date)}</span></div>
+                </div>
+              ))}
           </div>
         )}
 
@@ -1496,13 +1612,34 @@ export default function App() {
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Tap to mark as completed</div>
             <div style={{ display: "flex", flexWrap: "wrap" }}>
               {AS3000_COMPETENCIES.map(c => (
-                <div key={c} className={`ctag${(worker.competencies || []).includes(c) ? " on" : ""}`} onClick={() => toggleComp(c)}>
-                  {(worker.competencies || []).includes(c) ? "✓" : "○"} {c}
+                <div key={c} className={`ctag${(worker.competencies ||[]).includes(c) ? " on" : ""}`} onClick={() => toggleComp(c)}>
+                  {(worker.competencies ||[]).includes(c) ? "✓" : "○"} {c}
                 </div>
               ))}
             </div>
             <hr className="divider" />
-            <div style={{ fontSize: 12, color: "var(--muted)" }}>{(worker.competencies || []).length} / {AS3000_COMPETENCIES.length} completed</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>{(worker.competencies ||[]).length} / {AS3000_COMPETENCIES.length} completed</div>
+          </div>
+        )}
+
+        {/* Edit Worker Modal */}
+        {showEdit && (
+          <div className="moverlay" onClick={() => setShowEdit(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="mhandle" />
+              <div className="mtitle">EDIT WORKER</div>
+              <div className="fg"><label className="fl">Full Name</label><input className="fi" value={editWf.name} onChange={e => setEditWf(f => ({ ...f, name: e.target.value }))} /></div>
+              <div className="fg">
+                <label className="fl">Grade</label>
+                <select className="fs" value={editWf.grade} onChange={e => setEditWf(f => ({ ...f, grade: e.target.value }))}>
+                  {grades.map(g => <option key={g}>{g}</option>)}
+                </select>
+              </div>
+              <div className="mactions">
+                <button className="btn-s" onClick={() => setShowEdit(false)}>Cancel</button>
+                <button className="btn-p" style={{ flex: 1 }} onClick={saveEditWorker}>SAVE CHANGES</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1514,23 +1651,37 @@ export default function App() {
   // ════════════════════════════════════════════════════════════════════════════
 
   function Settings() {
-    function ListManager({ title, items, setItems }) {
-      const [newItem, setNewItem] = useState("");
+    const[expanded, setExpanded] = useState(null);
+
+    function AccordionSection({ id, title, children }) {
+      const isOpen = expanded === id;
       return (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div className="ctitle">{title}</div>
+        <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12, border: isOpen ? '1px solid var(--gold)' : '1px solid var(--border)' }}>
+          <div 
+            onClick={() => setExpanded(isOpen ? null : id)}
+            style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: isOpen ? 'var(--s2)' : 'transparent' }}
+          >
+            <div className="ctitle" style={{ marginBottom: 0, color: isOpen ? 'var(--gold)' : 'var(--muted)' }}>{title}</div>
+            <div style={{ color: 'var(--muted)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</div>
+          </div>
+          {isOpen && <div style={{ padding: 16, borderTop: '1px solid var(--border)' }}>{children}</div>}
+        </div>
+      )
+    }
+
+    function ListManager({ items, setItems }) {
+      const[newItem, setNewItem] = useState("");
+      return (
+        <div>
           {items.map((item, i) => (
             <div className="set-item" key={i}>
               <span className="set-tag">{item}</span>
-              <button className="btn-d" style={{ padding: "6px 10px", fontSize: 9 }}
-                onClick={() => setItems(p => p.filter((_, j) => j !== i))}>✕</button>
+              <button className="btn-d" style={{ padding: "6px 10px", fontSize: 9 }} onClick={() => setItems(p => p.filter((_, j) => j !== i))}>✕</button>
             </div>
           ))}
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <input className="fi" placeholder="Add new item…" value={newItem} onChange={e => setNewItem(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && newItem.trim()) { setItems(p => [...p, newItem.trim()]); setNewItem(""); } }} />
-            <button className="btn-g" style={{ flexShrink: 0 }}
-              onClick={() => { if (newItem.trim()) { setItems(p => [...p, newItem.trim()]); setNewItem(""); } }}>Add</button>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <input className="fi" placeholder="Add new item…" value={newItem} onChange={e => setNewItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && newItem.trim()) { setItems(p =>[...p, newItem.trim()]); setNewItem(""); } }} />
+            <button className="btn-g" style={{ flexShrink: 0 }} onClick={() => { if (newItem.trim()) { setItems(p =>[...p, newItem.trim()]); setNewItem(""); } }}>Add</button>
           </div>
         </div>
       );
@@ -1539,15 +1690,32 @@ export default function App() {
     return (
       <div>
         <div className="ptitle">SET<span>TINGS</span></div>
-        <div className="psub">MANAGE CUSTOM LIST ITEMS</div>
-        <ListManager title="Skill Areas" items={skillAreas} setItems={setSkillAreas} />
-        <ListManager title="Safety / Discipline Categories" items={safeCats} setItems={setSafeCats} />
-        <ListManager title="Worker Grades" items={grades} setItems={setGrades} />
+        <div className="psub">CONFIG & SYSTEM DATA</div>
 
-        <div className="card" style={{ borderColor: "var(--red)" }}>
+        <AccordionSection id="skills" title="Skill Areas (Training)">
+          <ListManager items={skillAreas} setItems={setSkillAreas} />
+        </AccordionSection>
+
+        <AccordionSection id="cats" title="Safety / Discipline Categories">
+          <ListManager items={safeCats} setItems={setSafeCats} />
+        </AccordionSection>
+
+        <AccordionSection id="grades" title="Worker Grades">
+          <ListManager items={grades} setItems={setGrades} />
+        </AccordionSection>
+
+        <AccordionSection id="builds" title="Builders">
+          <ListManager items={builders} setItems={setBuilders} />
+        </AccordionSection>
+
+        <AccordionSection id="supers" title="Supervisors">
+          <ListManager items={supervisors} setItems={setSupervisors} />
+        </AccordionSection>
+
+        <div className="card" style={{ borderColor: "var(--red)", marginTop: 24 }}>
           <div className="ctitle" style={{ color: "var(--red)" }}>Danger Zone</div>
           <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>Permanently delete all log data. Workers and sites are kept.</div>
-          <button className="btn-d" onClick={() => { if (window.confirm("Delete ALL log entries? This cannot be undone.")) { setLogs([]); showToast("All logs cleared"); } }}>
+          <button className="btn-d" style={{width:"100%", padding:14, fontSize:14}} onClick={() => { if (window.confirm("Delete ALL log entries? This cannot be undone.")) { setLogs([]); showToast("All logs cleared"); } }}>
             Delete All Log Entries
           </button>
         </div>
@@ -1582,13 +1750,13 @@ export default function App() {
 
   // ─── NAV & RENDER ────────────────────────────────────────────────────────────
 
-  const navItems = [
-    { id: "dashboard", label: "Home",    icon: "📊" },
-    { id: "log",       label: "Log",     icon: "✏️" },
-    { id: "team",      label: "Team",    icon: "👷" },
-    { id: "sites",     label: "Sites",   icon: "📍" },
-    { id: "reports",   label: "Reports", icon: "📄" },
-    { id: "settings",  label: "Config",  icon: "⚙️" },
+  const navItems =[
+    { id: "log",       label: "SUBMIT REPORT", icon: "📝", isMain: true },
+    { id: "dashboard", label: "Statistics",    icon: "📊" },
+    { id: "team",      label: "Team",          icon: "👷" },
+    { id: "sites",     label: "Sites",         icon: "📍" },
+    { id: "reports",   label: "Reports",       icon: "📄" },
+    { id: "settings",  label: "Config",        icon: "⚙️" },
   ];
 
   const viewMap = {
@@ -1607,7 +1775,6 @@ export default function App() {
       <div className="app">
         {/* Header */}
         <div className="hdr">
-          <div className="hdr-banner" />
           <div className="hdr-inner">
             <div className="logo-area">
               <img
@@ -1616,13 +1783,8 @@ export default function App() {
                 alt="ProGlow Electrics"
                 onError={e => { e.target.style.display = "none"; }}
               />
-              <div className="logo-divider" />
-              <div className="logo-sub">
-                <strong>FieldLog</strong>
-                Supervisor Portal
-              </div>
             </div>
-            <div className="hdr-count">{logs.filter(l=>l.role!=="also").length} entries</div>
+            <div className="hdr-count">{logs.length} entries</div>
           </div>
         </div>
 
@@ -1631,13 +1793,27 @@ export default function App() {
 
         {/* Bottom Nav */}
         <nav className="bnav">
-          {navItems.map(n => (
-            <button key={n.id}
-              className={`ni${(view === n.id || (n.id === "team" && view === "profile")) ? " active" : ""}`}
-              onClick={() => setView(n.id)}>
-              <span className="ni-i">{n.icon}</span>{n.label}
-            </button>
-          ))}
+          {navItems.map(n => {
+            if (n.isMain) {
+              return (
+                <button 
+                  key={n.id} 
+                  className={`ni ni-main ${view === n.id ? "active" : ""}`} 
+                  onClick={() => setView(n.id)}
+                >
+                  <span className="ni-i">{n.icon}</span>
+                  <span style={{lineHeight: 1.1, textAlign: 'center'}}>SUBMIT<br/>REPORT</span>
+                </button>
+              )
+            }
+            return (
+              <button key={n.id}
+                className={`ni${(view === n.id || (n.id === "team" && view === "profile")) ? " active" : ""}`}
+                onClick={() => setView(n.id)}>
+                <span className="ni-i">{n.icon}</span>{n.label}
+              </button>
+            );
+          })}
         </nav>
 
         <SMSModal />
